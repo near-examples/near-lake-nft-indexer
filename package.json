@@ -7,7 +7,7 @@
     "start": "tsc && node index.js"
   },
   "dependencies": {
-    "near-lake-framework": "^1.0.2"
+    "near-lake-framework": "^1.0.3"
   },
   "devDependencies": {
     "typescript": "^4.6.4"
