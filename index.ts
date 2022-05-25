@@ -20,16 +20,19 @@ interface EventLogData {
 };
 
 interface ParasEventLogData {
+  owner_id: string,
   token_ids: string[],
 };
 
 interface MintbaseEventLogData {
+  owner_id: string,
   memo: string,
 }
 
 async function handleStreamerMessage(
   streamerMessage: types.StreamerMessage
 ): Promise<void> {
+  const createdOn = new Date(streamerMessage.block.header.timestamp / 1000000)
   const relevantOutcomes = streamerMessage
     .shards
     .flatMap(shard => shard.receiptExecutionOutcomes)
@@ -37,9 +40,7 @@ async function handleStreamerMessage(
       receipt: {
         id: outcome.receipt.receiptId,
         receiverId: outcome.receipt.receiverId,
-        predecessorId: outcome.receipt.predecessorId,
       },
-      status: outcome.executionOutcome.outcome.status,
       events: outcome.executionOutcome.outcome.logs.map(
         (log: string): EventLogData => {
           const [_, probablyEvent] = log.match(/^EVENT_JSON:(.*)$/) ?? []
@@ -58,29 +59,48 @@ async function handleStreamerMessage(
       )
     )
 
+  let output = []
   for (let relevantOutcome of relevantOutcomes) {
-    let links = []
+    let marketplace = "Unknown"
+    let nfts = []
     if (relevantOutcome.receipt.receiverId.endsWith(".paras.near")) {
-      links = relevantOutcome.events.flatMap(event => {
+      marketplace = "Paras"
+      nfts = relevantOutcome.events.flatMap(event => {
         return (event.data as ParasEventLogData[])
-          .flatMap(eventData => eventData.token_ids)
-          .map(
-            tokenId => `https://paras.id/token/${relevantOutcome.receipt.receiverId}::${tokenId.split(":")[0]}/${tokenId}`
-          )
+          .map(eventData => ({
+            owner: eventData.owner_id,
+            links: eventData.token_ids.map(
+              tokenId => `https://paras.id/token/${relevantOutcome.receipt.receiverId}::${tokenId.split(":")[0]}/${tokenId}`
+            )
+           })
+        )
       })
     } else if (relevantOutcome.receipt.receiverId.match(/\.mintbase\d+\.near$/)) {
-      links = relevantOutcome.events.flatMap(event => {
-        return (event.data as MintbaseEventLogData[]).map(eventData => {
+      marketplace = "Mintbase"
+      nfts = relevantOutcome.events.flatMap(event => {
+        return (event.data as MintbaseEventLogData[])
+          .map(eventData => {
           const memo = JSON.parse(eventData.memo)
-          return `https://mintbase.io/thing/${memo["meta_id"]}:${relevantOutcome.receipt.receiverId}`
+          return {
+            owner: eventData.owner_id,
+            links: [`https://mintbase.io/thing/${memo["meta_id"]}:${relevantOutcome.receipt.receiverId}`]
+          }
         })
       })
+    } else {
+      nfts = relevantOutcome.events.flatMap(event => event.data)
     }
+    output.push({
+      receiptId: relevantOutcome.receipt.id,
+      marketplace,
+      createdOn,
+      nfts,
+    })
 
-    relevantOutcome["links"] = links
-
+  }
+  if (output.length) {
     console.log(`We caught freshly minted NFTs!`)
-    console.dir(relevantOutcome, { depth: 10 })
+    console.dir(output, { depth: 5 })
   }
 }
 
