@@ -41,7 +41,7 @@ async function handleStreamerMessage(
       },
       status: outcome.executionOutcome.outcome.status,
       events: outcome.executionOutcome.outcome.logs.map(
-        (log: string): EventLogData[] => {
+        (log: string): EventLogData => {
           const [_, probablyEvent] = log.match(/^EVENT_JSON:(.*)$/) ?? []
           try {
             return JSON.parse(probablyEvent)
@@ -58,7 +58,7 @@ async function handleStreamerMessage(
       )
     )
 
-  for (const relevantOutcome of relevantOutcomes) {   
+  for (let relevantOutcome of relevantOutcomes) {
     let links = []
     if (relevantOutcome.receipt.receiverId.endsWith(".paras.near")) {
       links = relevantOutcome.events.flatMap(event => {
@@ -68,7 +68,7 @@ async function handleStreamerMessage(
             tokenId => `https://paras.id/token/${relevantOutcome.receipt.receiverId}::${tokenId.split(":")[0]}/${tokenId}`
           )
       })
-    } else if (relevantOutcome.receipt.receiverId.endsWith(".mintbase.near")) {
+    } else if (relevantOutcome.receipt.receiverId.match(/\.mintbase\d+\.near$/)) {
       links = relevantOutcome.events.flatMap(event => {
         return (event.data as MintbaseEventLogData[]).map(eventData => {
           const memo = JSON.parse(eventData.memo)
@@ -76,8 +76,10 @@ async function handleStreamerMessage(
         })
       })
     }
-    
-    console.log(`We caught freshly minted NFTs! Here are the preview links: ${links}`)
+
+    relevantOutcome["links"] = links
+
+    console.log(`We caught freshly minted NFTs!`)
     console.dir(relevantOutcome, { depth: 10 })
   }
 }
