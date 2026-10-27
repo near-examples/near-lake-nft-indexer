@@ -4,12 +4,18 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "tsc && node index.js"
+    "start": "tsc && node dist/index.js",
+    "check": "tsc --noEmit",
+    "test": "tsc && node --test test/*.test.js"
   },
   "dependencies": {
-    "near-lake-framework": "^1.0.3"
+    "near-lake-framework": "^2.0.0"
   },
   "devDependencies": {
-    "typescript": "^4.6.4"
+    "typescript": "^5.9.3",
+    "@types/node": "^24"
+  },
+  "engines": {
+    "node": ">=22.22.2"
   }
 }

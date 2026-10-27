@@ -1,8 +1,16 @@
 {
   "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
     "lib": [
-      "ES2019",
+      "ES2022",
       "dom"
-    ]
-  }
+    ],
+    "outDir": "dist",
+    "skipLibCheck": true
+  },
+  "include": [
+    "index.ts",
+    "events.ts"
+  ]
 }

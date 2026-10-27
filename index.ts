@@ -1,22 +1,10 @@
 import { startStream, types } from 'near-lake-framework';
+import { parseNftMintEvents } from './events';
 
 const lakeConfig: types.LakeConfig = {
   s3BucketName: "near-lake-data-mainnet",
   s3RegionName: "eu-central-1",
-  startBlockHeight: 66264389,
-};
-
-// Interface to capture data about an event
-// Arguments
-// * `standard`: name of standard, e.g. nep171
-// * `version`: e.g. 1.0.0
-// * `event`: type of the event, e.g. nft_mint
-// * `data`: associate event data. Strictly typed for each set {standard, version, event} inside corresponding NEP
-interface EventLogData {
-  standard: string,
-  version: string,
-  event: string,
-  data?: unknown,
+  startBlockHeight: Number(process.env.START_BLOCK_HEIGHT ?? 66264389),
 };
 
 interface ParasEventLogData {
@@ -41,23 +29,10 @@ async function handleStreamerMessage(
         id: outcome.receipt.receiptId,
         receiverId: outcome.receipt.receiverId,
       },
-      events: outcome.executionOutcome.outcome.logs.map(
-        (log: string): EventLogData => {
-          const [_, probablyEvent] = log.match(/^EVENT_JSON:(.*)$/) ?? []
-          try {
-            return JSON.parse(probablyEvent)
-          } catch (e) {
-            return
-          }
-        }
-      )
-      .filter(event => event !== undefined)
+      events: parseNftMintEvents(outcome.executionOutcome.outcome.logs),
     }))
-    .filter(relevantOutcome =>
-      relevantOutcome.events.some(
-        event => event.standard === "nep171" && event.event === "nft_mint"
-      )
-    )
+    .filter(relevantOutcome => relevantOutcome.events.length > 0)
+
 
   let output = []
   for (let relevantOutcome of relevantOutcomes) {
@@ -80,10 +55,11 @@ async function handleStreamerMessage(
       nfts = relevantOutcome.events.flatMap(event => {
         return (event.data as MintbaseEventLogData[])
           .map(eventData => {
-          const memo = JSON.parse(eventData.memo)
+          let memo: { meta_id?: string } = {};
+          try { memo = JSON.parse(eventData.memo) ?? {}; } catch { /* Memo is optional. */ }
           return {
             owner: eventData.owner_id,
-            links: [`https://mintbase.io/thing/${memo["meta_id"]}:${relevantOutcome.receipt.receiverId}`]
+            links: typeof memo.meta_id === "string" ? [`https://mintbase.io/thing/${memo.meta_id}:${relevantOutcome.receipt.receiverId}`] : []
           }
         })
       })
@@ -105,5 +81,9 @@ async function handleStreamerMessage(
 }
 
 (async () => {
+  if (!Number.isSafeInteger(lakeConfig.startBlockHeight) || lakeConfig.startBlockHeight < 0) {
+    throw new Error('START_BLOCK_HEIGHT must be a non-negative safe integer');
+  }
+  console.log('Replaying historical NEAR Lake data; public buckets do not receive new blocks.');
   await startStream(lakeConfig, handleStreamerMessage);
-})();
+})().catch((error) => { console.error(error); process.exitCode = 1; });
